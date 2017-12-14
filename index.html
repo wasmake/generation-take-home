@@ -2,10 +2,200 @@
 <html>
   <head>
     <title>Sample App</title>
+    <!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/latest/css/bootstrap.min.css">
+
+<!-- Optional theme -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/latest/css/bootstrap-theme.min.css">
+<script type="text/javascript" src="http://code.jquery.com/jquery-latest.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
   </head>
   <body>
     <div id='root'>
     </div>
+    <script>
+    var pin = 0;
+    var spin = 0;
+    var stores = [];
+    var timeout = 0;
+    var time = 0;
+    var geocoder;
+
+  function initMap() {
+    var uluru = {lat: 19.4326077, lng: -99.13320799999997};
+    var map = new google.maps.Map(document.getElementById('map'), {
+      zoom: 10,
+      center: uluru
+    });
+
+    //We are getting the original stores json and converting it to an array.
+    $.getJSON("./store_directory.json", function(json1) {
+      $.each(json1, function(key, data) {
+        stores.push(JSON.stringify(data));
+    });
+  });
+    if(!Cookies.get('locations')){
+      //If we dont have any cookie, we will proceed with the loading as json
+      geocoder = new google.maps.Geocoder();
+      $.getJSON("./store_directory.json", function(json1) {
+        $.each(json1, function(key, data) {
+          timeout = timeout + 1000 + time;
+          time = time + 5;
+          setTimeout(function() {
+            getAddress(data.Name, data.Address, geocoder, map);
+          }, timeout);
+      });
+    });
+    }
+    else {
+      //But if we have a cookie, we will check if its complete
+      geocoder = new google.maps.Geocoder();
+      var cookie = Cookies.get('locations');
+      var size = cookie.split(';');
+      if(size.length == 273){
+        //Completed cookies with all stores
+        for(var i = 0; i < size.length; i++){
+          var marker = new google.maps.Marker({
+              position: size[i],
+              animation: google.maps.Animation.DROP,
+              map: map
+          });
+        }
+      }
+      else {
+        if(size.length > 1) {
+          for(var e = 0; e < size.length; e++){
+            //retrive data from cookie
+            if(size[e] != 0){
+              var coords = size[e].split(',');
+              var lati = coords[0];
+              var longi = coords[1];
+              getCookieAddress(map, longi, lati);
+            }
+          }
+        }
+        setTimeout(function() {
+          timeout = 0;
+          time = 0;
+          stores.forEach(function callback(current, index, array) {
+            if(index > size.length){
+              var data = JSON.parse(current);
+              timeout = timeout + 1000 + time;
+              time = time + 5;
+              setTimeout(function() {
+                getAddress(data.Name, data.Address, geocoder, map);
+              }, timeout);
+            }
+          });
+
+        }, 2000);
+
+
+      }
+    }
+
+  }
+
+  function getCookieAddress(map, longi, lati){
+    console.log("Lati " + parseFloat(lati.replace('(', "")) + " Longi " + parseFloat(longi.replace(')', "")));
+    var cor = {lat: parseFloat(lati.replace('(', "")), lng: parseFloat(longi.replace(')', ""))};
+    var marker = new google.maps.Marker({
+        position: cor,
+        animation: google.maps.Animation.DROP,
+        map: map
+    });
+    var image = 'http://www.beopopust.rs/img_nav/mala.png';
+    marker.addListener('click', function() {
+      marker.setIcon(image);
+      map.setCenter(marker.getPosition());
+      var cookiearr;
+      if(Cookies.get('favorite')){
+        cookiearr = Cookies.get('favorite');
+        var arre = cookiearr.split(',');
+        for(var i = 0; i < arre.length; i++){
+          if(arre[i] == marker.title){
+            console.log("Already favorite " + marker.title);
+          } else {
+            console.log("Not favorite, adding... " + marker.title);
+            cookiearr = cookiearr + "," + marker.title;
+            Cookies.set('favorite', cookiearr, { expires: 7 });
+          }
+        }
+      }
+      else {
+        cookiearr = [];
+        cookiearr = cookiearr + "," + marker.title;
+        Cookies.set('favorite', cookiearr, { expires: 7 });
+      }
+
+    });
+  }
+
+  var array = "";
+
+  function getAddress(name, address, geocoder, map){
+    geocoder.geocode( { 'address': address}, function(results, status) {
+      if(Cookies.get('locations')){
+        array = Cookies.get('locations');
+      }
+      pin = pin + 1;
+      if (status == 'OK') {
+        spin = spin +1;
+        array = array + ";" + results[0].geometry.location;
+        var marker = new google.maps.Marker({
+            position: results[0].geometry.location,
+            animation: google.maps.Animation.DROP,
+            map: map,
+            title: name
+        });
+        var image = 'http://www.beopopust.rs/img_nav/mala.png';
+        marker.addListener('click', function() {
+          marker.setIcon(image);
+          map.setCenter(marker.getPosition());
+          var cookiearr;
+          if(Cookies.get('favorite')){
+            cookiearr = Cookies.get('favorite');
+            var arre = cookiearr.split(',');
+            for(var i = 0; i < arre.length; i++){
+              if(arre[i] == marker.title){
+                console.log("Already favorite " + marker.title);
+              } else {
+                console.log("Not favorite, adding... " + marker.title);
+                cookiearr = cookiearr + "," + marker.title;
+                Cookies.set('favorite', cookiearr, { expires: 7 });
+              }
+            }
+          }
+          else {
+            cookiearr = [];
+            cookiearr = cookiearr + "," + marker.title;
+            Cookies.set('favorite', cookiearr, { expires: 7 });
+          }
+
+        });
+      } else {
+        //Error
+        array = array + ";" + "0";
+        if(status == 'OVER_QUERY_LIMIT'){
+          console.log("Over query with " + address);
+        }
+
+        if(status == 'ZERO_RESULTS'){
+          console.log("Zero results with " + address);
+        }
+      }
+
+    });
+    // we save into our cookies
+    Cookies.set('locations', array, { expires: 7 });
+  }
+
+</script>
+
     <script src="/static/bundle.js"></script>
+
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCVH8e45o3d-5qmykzdhGKd1-3xYua5D2A&callback=initMap">
+    </script>
   </body>
 </html>
